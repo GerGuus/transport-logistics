@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, reactive } from 'vue'
-import { useCompanyStore } from '@/entities/company/company.store'
+import { onMounted, reactive, ref } from 'vue'
+import { api } from '@/shared/api'
 
-const store = useCompanyStore()
+const items = ref<any[]>([])
+const loading = ref(false)
 
 const form = reactive({
     name: '',
@@ -13,8 +14,25 @@ const form = reactive({
     address: '',
 })
 
-const submit = async () => {
-    await store.create({ ...form })
+const fetchAll = async () => {
+    loading.value = true
+    try {
+        const { data } = await api.get('/companies')
+        items.value = data['hydra:member'] ?? data.member ?? []
+    } finally {
+        loading.value = false
+    }
+}
+
+const createItem = async () => {
+    await api.post('/companies', {
+        name: form.name,
+        type: form.type,
+        contactPerson: form.contactPerson || null,
+        phone: form.phone || null,
+        email: form.email || null,
+        address: form.address || null,
+    })
 
     form.name = ''
     form.type = 'client'
@@ -22,34 +40,65 @@ const submit = async () => {
     form.phone = ''
     form.email = ''
     form.address = ''
+
+    await fetchAll()
 }
 
-onMounted(() => {
-    store.fetchAll()
-})
+const deleteItem = async (id: number) => {
+    await api.delete(`/companies/${id}`)
+    await fetchAll()
+}
+
+onMounted(fetchAll)
 </script>
 
 <template>
     <div>
         <h1>Companies</h1>
 
-        <form @submit.prevent="submit">
+        <div style="display: grid; gap: 8px; max-width: 420px; margin-bottom: 24px;">
             <input v-model="form.name" placeholder="Name" />
-            <input v-model="form.type" placeholder="Type" />
+            <select v-model="form.type">
+                <option value="client">client</option>
+                <option value="supplier">supplier</option>
+                <option value="carrier">carrier</option>
+            </select>
             <input v-model="form.contactPerson" placeholder="Contact person" />
             <input v-model="form.phone" placeholder="Phone" />
             <input v-model="form.email" placeholder="Email" />
-            <input v-model="form.address" placeholder="Address" />
-            <button type="submit">Create</button>
-        </form>
+            <textarea v-model="form.address" placeholder="Address" />
+            <button @click="createItem">Create</button>
+        </div>
 
-        <div v-if="store.loading">Loading...</div>
+        <div v-if="loading">Loading...</div>
 
-        <ul v-else>
-            <li v-for="company in store.items" :key="company.id">
-                {{ company.name }} — {{ company.type }}
-                <button @click="store.remove(company.id)">Delete</button>
-            </li>
-        </ul>
+        <table v-else border="1" cellpadding="8" cellspacing="0">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Type</th>
+                <th>Contact</th>
+                <th>Phone</th>
+                <th>Email</th>
+                <th>Address</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            <tr v-for="item in items" :key="item.id">
+                <td>{{ item.id }}</td>
+                <td>{{ item.name }}</td>
+                <td>{{ item.type }}</td>
+                <td>{{ item.contactPerson }}</td>
+                <td>{{ item.phone }}</td>
+                <td>{{ item.email }}</td>
+                <td>{{ item.address }}</td>
+                <td>
+                    <button @click="deleteItem(item.id)">Delete</button>
+                </td>
+            </tr>
+            </tbody>
+        </table>
     </div>
 </template>
